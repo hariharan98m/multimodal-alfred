@@ -1,5 +1,7 @@
+.env
 data/json_2.1.0
 data/lite
 data/*.7z
 data/splits
 alfred_env
+.ipynb_checkpoints
