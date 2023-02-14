@@ -15,7 +15,7 @@ import pandas as pd
 
 import string
 
-rootdir = 'alfred/data/json_2.1.0'
+rootdir = '../data/json_2.1.0'
 
 nlp = spacy.load("en_core_web_sm")
 
@@ -79,8 +79,8 @@ def get_most_frequent_nltk():
 
     df_n = pd.DataFrame(nouns_tally.most_common(), columns=['noun', 'count'])
     df_v = pd.DataFrame(verbs_tally.most_common(), columns=['verb', 'count'])
-    print(df_n[:10])
-    print(df_v[:10])
+    print(df_n[:20])
+    print(df_v[:20])
 
 
 def get_most_frequent_spacy():
@@ -101,7 +101,7 @@ def get_most_frequent_spacy():
                 if token.pos_ == 'NOUN':
                     nouns.append(token.text)
                     # print(token.text)
-                elif token[1] == 'VERB':
+                elif token.pos_ == 'VERB':
                     verbs.append(token.text)
                     # print(token.text)
 
@@ -110,8 +110,8 @@ def get_most_frequent_spacy():
 
     df_n = pd.DataFrame(nouns_tally.most_common(), columns=['noun', 'count'])
     df_v = pd.DataFrame(verbs_tally.most_common(), columns=['verb', 'count'])
-    print(df_n[:10])
-    print(df_v[:10])
+    print(df_n[:20])
+    print(df_v[:20])
 
 if __name__ == '__main__':
     # get_most_frequent_nltk()
