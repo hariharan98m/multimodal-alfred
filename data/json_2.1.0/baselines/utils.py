@@ -19,8 +19,8 @@ def safe_mkdir(path):
         os.makedirs(path)
 
 class Parameters:
-    model_path = 'Users/hariharan/hari_works/alfred/data/json_2.1.0/baselines/models'
-    datasets_path = 'Users/hariharan/hari_works/alfred/data/json_2.1.0'
+    model_path = '/Users/hariharan/hari_works/alfred/data/json_2.1.0/baselines/models'
+    datasets_path = '/Users/hariharan/hari_works/alfred/data/json_2.1.0'
 
 
 def execute(cmd):
@@ -40,8 +40,8 @@ def accuracy(model, inps, true_labels):
     inp_preds = model(inps)
 
     for inp_pred, true_label in zip(inp_preds, true_labels):
-        preds = inp_pred.split('->')
-        labels = true_label.split('->')
+        preds = [i.strip() for i in inp_pred.strip().split('->')]
+        labels = [i.strip() for i in true_label.split('->')]
         sample_correct = 0
         for l in labels:
             if l in preds:
@@ -49,7 +49,7 @@ def accuracy(model, inps, true_labels):
                 correct += 1
         total += len(labels)
         accs.append(sample_correct/len(labels))
-    return correct / total, accs
+    return correct / total, inp_preds, accs
 
 def generate_instructions_actions(data_path, modality = 'language'):
     data = defaultdict(list)
@@ -77,7 +77,7 @@ def generate_instructions_actions(data_path, modality = 'language'):
                     A += '-> (NoOp)'
 
                 demonstration = choice(json_object['turk_annotations']['anns'])
-                I = f"Goal: {demonstration['task_desc']}."
+                I = f"Goal: {demonstration['task_desc']}"
                 if modality == 'language':
                     I += " Steps: {'-> '.join(demonstration['high_descs'])}"
 
@@ -89,8 +89,10 @@ def generate_instructions_actions(data_path, modality = 'language'):
     object_vocab -= {''}
     return data, task_type2keys, examples, object_vocab, action_vocab
 
-data_root = "/Users/hariharan/hari_works/alfred/data/json_2.1.0"
+
 if __name__ == '__main__':
-    train_data, task_type2keys, _, object_vocab, action_vocab = generate_instructions_actions(data_path = os.path.join(data_root, 'train'))
+    train_data, task_type2keys, _, object_vocab, action_vocab = generate_instructions_actions(
+        data_path = os.path.join(Parameters.datasets_path, 'train')
+    )
     print(action_vocab)
     print(object_vocab)

@@ -58,7 +58,7 @@ class FTDataset(torch.utils.data.Dataset):
         for instructions, actions, _ in self.examples:
             if dir_name == 'train':
                 acts = actions.split('->')
-                for i in range(1, len(acts)):
+                for i in range(5):
                     label = '-> '.join(acts[i:])
                     prompt = instructions + ' | Actions: ' + '-> '.join(acts[:i]) + '-> '
                     self.prompts.append(prompt)

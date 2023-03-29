@@ -5,7 +5,7 @@ import openai
 from multiprocessing.pool import ThreadPool as Pool
 import tqdm
 from dataset import PromptingDataset
-from utils import accuracy, safe_mkdir
+from utils import accuracy, safe_mkdir, Parameters
 import pandas as pd
 
 load_dotenv()
@@ -81,8 +81,6 @@ A: '''
 
         return inp_preds
 
-root =  "/Users/hariharan/hari_works/alfred/data/json_2.1.0/baselines/models"
-
 def experiment_language_prompting():
     model_name = 'LanguagePrompting'
     dataset_name = 'valid_seen'
@@ -112,17 +110,21 @@ def experiment_language_prompting():
         'preds': inp_preds,
         'accs': accs,
     })
-    safe_mkdir(f'{root}/{model_name}')
-    results.to_csv(f'{root}/{model_name}/{dataset_name}_{acc}.csv', index= False)
+    final_path = os.path.join(Parameters.model_path, model_name, f'{dataset_name}_{acc}.csv')
+    safe_mkdir(final_path)
+    results.to_csv(final_path, index= False)
 
 
 def experiment_action_prompting():
     model_name = 'ActionPrompting'
-    prompting = Prompting(temperature= 0.8, model = 'gpt-4', modality = 'action')
     dataset_name = 'valid_seen'
     dataset = PromptingDataset(dataset_name, modality = 'action')
     dataloader = torch.utils.data.DataLoader(dataset, batch_size= 10, shuffle= False,
                                              num_workers= 0)
+    prompting = Prompting(temperature= 0.8, model = 'gpt-4',
+                          modality = 'action',
+                          action_vocab= dataset.action_vocab,
+                          object_vocab= dataset.object_vocab)
     inps = []
     true_labels = []
     for i, ((ins_batch, a_batch), train_examples_batch) in enumerate(dataloader):
@@ -146,8 +148,10 @@ def experiment_action_prompting():
         'preds': inp_preds,
         'accs': accs,
     })
-    safe_mkdir(f'{root}/{model_name}')
-    results.to_csv(f'{root}/{model_name}/{dataset_name}_{acc}.csv', index= False)
+    final_path = os.path.join(Parameters.model_path, model_name, f'{dataset_name}_{acc}.csv')
+    safe_mkdir(final_path)
+    results.to_csv(final_path, index= False)
+
 
 if __name__ == '__main__':
     # experiment_language_prompting()

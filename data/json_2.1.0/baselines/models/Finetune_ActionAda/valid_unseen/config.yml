@@ -1,0 +1,6 @@
+--
+- dataset_name : 'valid_unseen'
+- modality : 'action'
+- finetune_id : "ft-oZIrMnZhNesbuvDFamoUIgwG"
+- model_name : "ada:ft-carnegie-mellon-university-2023-03-29-00-36-57"
+- save_suffix : "_ActionAda"
