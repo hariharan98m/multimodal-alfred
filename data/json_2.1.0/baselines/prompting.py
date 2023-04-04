@@ -7,20 +7,20 @@ import tqdm
 from dataset import PromptingDataset
 from utils import accuracy, safe_mkdir, Parameters
 import pandas as pd
+import time
 
 load_dotenv()
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
 class Prompting(torch.nn.Module):
-    def __init__(self, modality, temperature, model, action_vocab, object_vocab):
+    def __init__(self, modality, model, action_vocab, object_vocab):
         super(Prompting, self).__init__()
-        self.temperature = temperature
         self.model = model
         self.modality = modality
         self.action_vocab= action_vocab
         self.object_vocab= object_vocab
 
-    def forward(self, inps, action_vocab, object_vocab):
+    def forward(self, inps):
         '''
             inps: list of data texts.
             returns : predicted completions.
@@ -55,13 +55,19 @@ We want to predict the action sequence needed to accomplish the below task. Acti
 A: '''
 
             if self.model == 'gpt-4':
-                response = openai.ChatCompletion.create(
-                    model=self.model,
-                    messages=[
-                        {"role": "user", "content": prompt}
-                    ]
-                )
-                inp_pred = response.choices[0].message.content.strip()
+                while True:
+                    try:
+                        response = openai.ChatCompletion.create(
+                            model=self.model,
+                            messages=[
+                                {"role": "user", "content": prompt}
+                            ]
+                        )
+                        inp_pred = response.choices[0].message.content.strip()
+                        break
+                    except:
+                        time.sleep(5)
+                        continue
             else:
                 response = openai.Completion.create(
                     model = self.model,
@@ -81,53 +87,18 @@ A: '''
 
         return inp_preds
 
-def experiment_language_prompting():
-    model_name = 'LanguagePrompting'
-    dataset_name = 'valid_seen'
-    prompting = Prompting(temperature= 0.8, model = 'gpt-4')# text-davinci-003')
-    dataset = PromptingDataset(dataset_name)
+def experiment_prompting(modality, dataset_name, model_name = 'ActionPrompting'):
+    dataset = PromptingDataset(dataset_name, modality = modality)
     dataloader = torch.utils.data.DataLoader(dataset, batch_size= 10, shuffle= False,
                                              num_workers= 0)
-    inps = []
-    true_labels = []
-    for i, ((ins_batch, a_batch), train_examples_batch) in enumerate(dataloader):
-        for j in range(len(ins_batch)):
-            # create a list of (instruction, action) pairs for the closest examples.
-            close_examples = []
-            for example in train_examples_batch:
-                close_examples.append((example[0][j], example[1][j]))
-            inps.append((ins_batch[j], close_examples))
-            true_labels.append(a_batch[j])
-            break
-
-    inp_preds = prompting(inps)
-    acc, accs = accuracy(inp_preds, true_labels)
-    print('accuracy: {:.3f}'.format(acc))
-
-    results = pd.DataFrame({
-        'inps': [inp[0] for inp in inps],
-        'labels': true_labels,
-        'preds': inp_preds,
-        'accs': accs,
-    })
-    final_path = os.path.join(Parameters.model_path, model_name, f'{dataset_name}_{acc}.csv')
-    safe_mkdir(final_path)
-    results.to_csv(final_path, index= False)
-
-
-def experiment_action_prompting():
-    model_name = 'ActionPrompting'
-    dataset_name = 'valid_seen'
-    dataset = PromptingDataset(dataset_name, modality = 'action')
-    dataloader = torch.utils.data.DataLoader(dataset, batch_size= 10, shuffle= False,
-                                             num_workers= 0)
-    prompting = Prompting(temperature= 0.8, model = 'gpt-4',
-                          modality = 'action',
+    prompting = Prompting(model = 'gpt-4',
+                          modality = modality,
                           action_vocab= dataset.action_vocab,
                           object_vocab= dataset.object_vocab)
     inps = []
     true_labels = []
-    for i, ((ins_batch, a_batch), train_examples_batch) in enumerate(dataloader):
+    trial_ids = []
+    for i, ((ins_batch, a_batch), train_examples_batch, trial_ids_batch) in enumerate(dataloader):
         for j in range(len(ins_batch)):
             # create a list of (instruction, action) pairs for the closest examples.
             close_examples = []
@@ -135,24 +106,29 @@ def experiment_action_prompting():
                 close_examples.append((example[0][j], example[1][j]))
             inps.append((ins_batch[j], close_examples))
             true_labels.append(a_batch[j])
-            break
+            trial_ids.append(trial_ids_batch[j])
 
-    inp_preds = prompting(inps, action_vocab= dataset.action_vocab,
-                              object_vocab= dataset.object_vocab)
-    acc, accs = accuracy(inp_preds, true_labels)
+    # inp_preds = prompting(inps, action_vocab= dataset.action_vocab,
+    #                           object_vocab= dataset.object_vocab)
+    acc, inp_preds, accs = accuracy(prompting, inps, true_labels)
     print('accuracy: {:.3f}'.format(acc))
 
     results = pd.DataFrame({
+        'trial_ids': trial_ids,
         'inps': [inp[0] for inp in inps],
         'labels': true_labels,
         'preds': inp_preds,
         'accs': accs,
     })
-    final_path = os.path.join(Parameters.model_path, model_name, f'{dataset_name}_{acc}.csv')
-    safe_mkdir(final_path)
+
+    final_dir_path = os.path.join(Parameters.model_path, model_name)
+    safe_mkdir(final_dir_path)
+
+    final_path = os.path.join(final_dir_path, f'{dataset_name}_{acc}.csv')
     results.to_csv(final_path, index= False)
 
 
 if __name__ == '__main__':
     # experiment_language_prompting()
-    experiment_action_prompting()
+    modality = 'action'
+    experiment_prompting(modality = modality, dataset_name = 'valid_unseen', model_name = modality.capitalize() + 'Prompting')

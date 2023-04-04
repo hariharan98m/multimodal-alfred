@@ -1,11 +1,9 @@
 import torch
 from numpy.random import choice
-from utils import generate_instructions_actions, num_tokens_from_string
+from utils import generate_instructions_actions, num_tokens_from_string, Parameters
 import json
 import random
 import os
-
-data_root =  "/Users/hariharan/hari_works/alfred/data/json_2.1.0"
 
 class PromptingDataset(torch.utils.data.Dataset):
     def __init__(self, dir_name, modality, num_examples = 5):
@@ -14,8 +12,8 @@ class PromptingDataset(torch.utils.data.Dataset):
         '''
         super(PromptingDataset, self).__init__()
         self.modality = modality
-        self.train_data, self.task_type2keys, _, self.object_vocab, self.action_vocab = generate_instructions_actions(data_path = os.path.join(data_root, 'train'), modality = self.modality)
-        _, _, self.examples, _, _ = generate_instructions_actions(data_path = os.path.join(data_root, dir_name), modality = self.modality)
+        self.train_data, self.task_type2keys, _, self.object_vocab, self.action_vocab = generate_instructions_actions(data_path = os.path.join(Parameters.datasets_path, 'train'), modality = self.modality)
+        _, _, self.examples, _, _ = generate_instructions_actions(data_path = os.path.join(Parameters.datasets_path, dir_name), modality = self.modality)
         self.num_examples = num_examples
         self.length = len(self.examples)
 
@@ -23,7 +21,7 @@ class PromptingDataset(torch.utils.data.Dataset):
         '''
             Returns a tuple of (instruction, action)
         '''
-        i, a, key = self.examples[item]
+        i, a, key, trial_id = self.examples[item]
         if len(self.train_data[key]) > 0 :
             closest_example_indices = choice(range(len(self.train_data[key])), self.num_examples)
             some_train_examples = [self.train_data[key][i] for i in closest_example_indices]
@@ -37,7 +35,7 @@ class PromptingDataset(torch.utils.data.Dataset):
                 rand_idx = random.randint(0, len(self.train_data[key])-1)
                 some_train_examples.append(self.train_data[key][rand_idx])
 
-        return (i, a), some_train_examples
+        return (i, a), some_train_examples, trial_id
 
     def __len__(self):
         return self.length
@@ -50,14 +48,14 @@ class FTDataset(torch.utils.data.Dataset):
         '''
         super(FTDataset, self).__init__()
         self.modality = modality
-        self.data, _, self.examples, self.object_vocab, self.action_vocab = generate_instructions_actions(data_path = os.path.join(data_root, dir_name), modality = self.modality)
+        self.data, _, self.examples, self.object_vocab, self.action_vocab = generate_instructions_actions(data_path = os.path.join(Parameters.datasets_path, dir_name), modality = self.modality)
 
         self.datalist = []
         self.prompts = []
         self.completions = []
-        for instructions, actions, _ in self.examples:
+        for instructions, actions, _, trial_id in self.examples:
             if dir_name == 'train':
-                acts = actions.split('->')
+                acts = actions.split('-> ')
                 for i in range(5):
                     label = '-> '.join(acts[i:])
                     prompt = instructions + ' | Actions: ' + '-> '.join(acts[:i]) + '-> '

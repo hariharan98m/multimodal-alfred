@@ -4,6 +4,7 @@ from pathlib import Path
 from numpy.random import choice
 import json
 import os
+import numpy as np
 import subprocess
 
 encoding = tiktoken.get_encoding("cl100k_base")
@@ -22,7 +23,6 @@ class Parameters:
     model_path = '/Users/hariharan/hari_works/alfred/data/json_2.1.0/baselines/models'
     datasets_path = '/Users/hariharan/hari_works/alfred/data/json_2.1.0'
 
-
 def execute(cmd):
     popen = subprocess.Popen(cmd, stdout=subprocess.PIPE, universal_newlines=True, shell = True)
     for stdout_line in iter(popen.stdout.readline, ""):
@@ -32,12 +32,30 @@ def execute(cmd):
     if return_code:
         raise subprocess.CalledProcessError(return_code, cmd)
 
+def perplexity(top_logprobs):
+    perplexities = []
+    mapping = defaultdict(list)
+    for t in top_logprobs:
+        log_probs = [list(i.values())[0] for i in t]
+        for i in t:
+            for k, v in i.items():
+                mapping[k].append(np.exp(v))
+        perplexities.append(np.exp(-sum(log_probs)/len(log_probs)))
+    for m, probs in mapping.items():
+        mapping[m] = sum(probs)/len(probs)
+    return perplexities, mapping
+
 def accuracy(model, inps, true_labels):
     correct = 0
     total = 0
     accs = []
 
     inp_preds = model(inps)
+    ft = False
+    if len(inp_preds[0])== 2:
+        top_logprobs = [i[1] for i in inp_preds]
+        inp_preds = [i[0] for i in inp_preds]
+        ft = True
 
     for inp_pred, true_label in zip(inp_preds, true_labels):
         preds = [i.strip() for i in inp_pred.strip().split('->')]
@@ -49,6 +67,9 @@ def accuracy(model, inps, true_labels):
                 correct += 1
         total += len(labels)
         accs.append(sample_correct/len(labels))
+    if ft:
+        perplexities, mapping = perplexity(top_logprobs)
+        return correct / total, inp_preds, accs, perplexities, mapping
     return correct / total, inp_preds, accs
 
 def generate_instructions_actions(data_path, modality = 'language'):
@@ -63,6 +84,8 @@ def generate_instructions_actions(data_path, modality = 'language'):
             task_type, obj, parent, recep, _ = path.name.split('-')
             for json_file in path.rglob('*.json'):
                 json_object = json.load(open(json_file, 'r'))
+
+                trial = json_file.parent.name
 
                 plan = json_object['plan']['high_pddl']
                 A = []
@@ -79,12 +102,12 @@ def generate_instructions_actions(data_path, modality = 'language'):
                 demonstration = choice(json_object['turk_annotations']['anns'])
                 I = f"Goal: {demonstration['task_desc']}"
                 if modality == 'language':
-                    I += " Steps: {'-> '.join(demonstration['high_descs'])}"
+                    I += f" Steps: {'-> '.join(demonstration['high_descs'])}"
 
                 key = (task_type, obj, parent, recep)
                 data[key].append((I, A))
                 task_type2keys[task_type].append(key)
-                examples.append((I, A, key))
+                examples.append((I, A, key, trial))
 
     object_vocab -= {''}
     return data, task_type2keys, examples, object_vocab, action_vocab

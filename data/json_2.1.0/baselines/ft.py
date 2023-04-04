@@ -76,7 +76,7 @@ def finetune(model, dataset_name, modality, num_epochs = 20, save_suffix="_actio
 
     model.model = model_name
 
-    test_acc, test_preds, test_accs = accuracy(model, test_dataset.prompts,
+    test_acc, test_preds, test_accs, tokens, token_logprobs = accuracy(model, test_dataset.prompts,
                                             true_labels=test_dataset.completions)
 
     final_csv_path = os.path.join(Parameters.model_path, model.__class__.__name__ + save_suffix, dataset_name,
@@ -86,38 +86,40 @@ def finetune(model, dataset_name, modality, num_epochs = 20, save_suffix="_actio
         'prompt': test_dataset.prompts,
         'true': test_dataset.completions,
         'pred': test_preds,
-        'acc': test_accs
+        'acc': test_accs,
+        'tokens': tokens,
+        'token_logprobs': token_logprobs
     })
     results.to_csv(final_csv_path, index= False)
 
     return model
 
-def make_predictions():
-    dataset_name = 'valid_unseen'
-    modality = 'action'
-    finetune_id = "ft-oZIrMnZhNesbuvDFamoUIgwG"
-    model_name = "ada:ft-carnegie-mellon-university-2023-03-29-00-36-57"
-    save_suffix = "_ActionAda"
 
+def make_predictions(dataset_name, modality, finetune_id, model_name, save_suffix):
     model = Finetune()
     model.model = model_name
 
     test_dataset = FTDataset(dataset_name, modality)
-    test_acc, test_preds, test_accs = accuracy(model, test_dataset.prompts,
+    test_acc, test_preds, test_accs, perplexity, mapping = accuracy(model, test_dataset.prompts,
                                         true_labels=test_dataset.completions)
 
     checkpoint_dir_path = os.path.join(Parameters.model_path, model.__class__.__name__ + save_suffix,
                                    dataset_name)
     safe_mkdir(checkpoint_dir_path)
 
-    final_csv_path = os.path.join(checkpoint_dir_path, f"{finetune_id}_{model_name}_{test_acc}.csv")
+    final_csv_path = os.path.join(checkpoint_dir_path, f"{finetune_id}_{model_name}_{test_acc}_{sum(perplexity)/len(perplexity)}.csv")
 
     results = pd.DataFrame({
         'prompt': test_dataset.prompts,
         'true': test_dataset.completions,
         'pred': test_preds,
-        'acc': test_accs
+        'acc': test_accs,
+        'perplexity': perplexity,
     })
+
+    final_json_path = os.path.join(checkpoint_dir_path, f"{model_name}_mapping.json")
+    json.dump(mapping, open(final_json_path, 'w'))
+
     results.to_csv(final_csv_path, index= False)
 
 
@@ -143,25 +145,39 @@ class Finetune(torch.nn.Module):
                 top_p=1.0,
                 frequency_penalty=0.0,
                 presence_penalty=0.0,
-                stop = "(NoOp)"
+                stop = "(NoOp)",
+                logprobs=1
             )
             # print('logprobs : ', res['choices'][0]['logprobs']['top_logprobs'][0])
             result = response.choices[0].text.strip() + ' (NoOp)'
-
-            return result
+            top_logprobs = response.choices[0]['logprobs']['top_logprobs']
+            return result, top_logprobs
 
         with Pool(25) as p:
             inp_preds = list(tqdm.tqdm(p.imap(predict_example, inps), total=len(inps)))
 
         return inp_preds
 
-if __name__ == '__main__':
-    dataset_name = 'valid_seen'
+# action modality
+# "ada:ft-carnegie-mellon-university-2023-03-29-00-36-57"
+# "ft-oZIrMnZhNesbuvDFamoUIgwG"
 
+# language modality
+# "ada:ft-carnegie-mellon-university-2023-03-30-20-42-45"
+# "ft-7i9Fgy6ieJKvDiNNS3mRvRc1"
+
+if __name__ == '__main__':
     # make_predictions()
 
     # model = Finetune()
     # finetune(model, dataset_name, 'action', num_epochs=20, save_suffix='_ActionAda')
 
-    model = Finetune()
-    finetune(model, dataset_name, 'action', num_epochs=20, save_suffix='_ActionAda')
+    # model = Finetune()
+    # finetune(model, dataset_name, 'language', num_epochs=20, save_suffix='_LanguageAda')
+
+    dataset_name = 'valid_unseen'
+    modality = 'language'
+    finetune_id = "ft-oZIrMnZhNesbuvDFamoUIgwG"
+    model_name = "ada:ft-carnegie-mellon-university-2023-03-30-20-42-45"
+    save_suffix = f"_{modality.capitalize()}Ada"
+    make_predictions(dataset_name, modality, finetune_id, model_name, save_suffix)
